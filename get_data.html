@@ -2,15 +2,46 @@
 <html lang="en">
 <head>
     <title>OpenPHACTS Assignment</title>
-    <script src="node_modules/jquery/dist/jquery.js"></script>
-    <script src="node_modules/ops.js/src/OPS.js"></script>
+    <script src="node_modules/jquery/dist/jquery.min.js"></script>
+    <script src="node_modules/ops.js/src/combined.js"></script>
+    <script type="text/javascript" src="https://egonw.github.io/pils/lib/purl.js"></script>
+    <script type="text/javascript" src="https://egonw.github.io/pils/lib/jquery-1.9.1.min.js"></script>
 
 
     <meta charset="UTF-8">
 </head>
 <body>
-    <script>
-
+<h3>Output</h3>
+<h3>Search Results</h3>
+<p><div id="table"></div></p>
+<h3>Compound Details</h3>
+<p><div id="details"></div></p>
+<h3>JSON reply</h3>
+<p><div id="json">Nothing yet</div></p>
+    <script type="text/javascript">
+        // gene : BRCA1
+        let searcher = new ConceptWikiSearch('https://beta.openphacts.org/2.2', 'b9db3313','424834d6629c0089dd4a9aaf2c09e197');
+        let callback=function(success, status, response){
+            document.getElementById("json").innerHTML = JSON.stringify(response);
+            html = "<table>";
+            for (var i=0; i<response.length; i++) {
+                html += "<tr>";
+                html += "<td>";
+                html += "Name: <span>" +
+                    response[i].prefLabel +
+                    "</span>";
+                html += "</td>";
+                html += "</tr>";
+            }
+            html += "</table>";
+            document.getElementById("table").innerHTML = html;
+        };
+        searcher.byTag(
+            'Aspirin', '5', '4',
+            '07a84994-e464-4bbf-812a-a4b96fa3d197',
+            callback
+        );
     </script>
 </body>
 </html>
+
