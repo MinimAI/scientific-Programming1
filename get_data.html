@@ -33,6 +33,7 @@
 
             const gene = document.getElementById("frm")[0].value;
 
+            // SPARQL code to query uniprot id from wikidata
             const sparql = `
             PREFIX wd: <http://www.wikidata.org/entity/>
             PREFIX wdt: <http://www.wikidata.org/prop/direct/>
@@ -47,6 +48,7 @@
 
             const link_base = 'http://purl.uniprot.org/uniprot/';
 
+            // query wikidata and then query OpenPhacts
             fetch(
                 wdk.sparqlQuery(sparql)
             ).then( response => response.json()
@@ -57,19 +59,25 @@
                     let uniprot_link = link_base.concat(uid);
                     setupSearch(gene,uid, uniprot_link);
                     const sources = new TargetSearch("https://beta.openphacts.org/2.2", "91f5d4d0", "1af5086da757e57c553bfa1351708d5f");
+                    // query the target count
                     sources.targetPharmacologyCount(
                         uniprot_link,
                         null, null, null, null, null, null, null, null, null,
                         null, null, null, null, null, null, null, null, handleCount
                     );
 
-
+                    // query the molecule links
+                    let node = document.createElement("li");
+                    let gene_node = document.createTextNode("Molecule links: ");
+                    node.appendChild(gene_node);
+                    document.getElementById("list").appendChild(node);
                     sources.targetPharmacology(
                         uniprot_link,
                         null, null, null, null, null, null, null, null, null,
                         null, null, null, null, null, null, null, null, null,
                         null, null, handleList
-                    )
+                    );
+
                 }
             );
 
@@ -78,7 +86,7 @@
                 let gene_node = document.createTextNode("Gene: " + gene);
                 node.appendChild(gene_node);
                 document.getElementById("list").appendChild(node);
-                
+
                 node = document.createElement("li");
                 let uniprot_node = document.createTextNode("UniProt identifier: " + uid);
                 node.appendChild(uniprot_node);
@@ -90,41 +98,34 @@
                 document.getElementById("list").appendChild(node);
             };
 
-
-
-            var callback = function(success, status, response){
-                console.log(success);
-                console.log(status);
+            const handleCount = function(success, status, jsonData) {
                 console.log(success || status == 200);
                 if (success && status == 200) {
-                    d3.select("#json").html("<pre>" + JSON.stringify(response, undefined, 2) + "</pre>");
-                } else {
-                    d3.select("#json").html("No success: " + status);
+                    // print most recent json reply
+                    d3.select("#json").html("<pre>" + JSON.stringify(jsonData, undefined, 2) + "</pre>");
+
+                    // print the Target count
+                    let node = document.createElement("li");
+                    if (jsonData.primaryTopic.targetPharmacologyTotalResults) {
+                        let textnode = document.createTextNode("Target count: " + jsonData.primaryTopic.targetPharmacologyTotalResults);
+                        node.appendChild(textnode);
+                    } else {
+                        let textnode = document.createTextNode("Target count: " + 0);
+                        node.appendChild(textnode);
+                    }
+                    document.getElementById("list").appendChild(node);
                 }
             };
 
-            var handleCount = function(success, status, jsonData) {
+            const handleList = function(success, status, jsonData) {
+                // print most recent json reply
                 d3.select("#json").html("<pre>" + JSON.stringify(jsonData, undefined, 2) + "</pre>");
-                console.log(jsonData)
-                var node = document.createElement("li");
-                if (jsonData.primaryTopic.targetPharmacologyTotalResults) {
-                    var textnode = document.createTextNode("Target count: " + jsonData.primaryTopic.targetPharmacologyTotalResults);
-                } else {
-                    var textnode = document.createTextNode("Target count: " + 0);
-                }
-                node.appendChild(textnode);
-                document.getElementById("list").appendChild(node);
-            };
-
-            var handleList = function(success, status, jsonData) {
-                d3.select("#json").html("<pre>" + JSON.stringify(jsonData, undefined, 2) + "</pre>");
-                console.log(success);
-                console.log(status);
                 console.log(success || status == 200);
                 if (success && status == 200) {
-                    var itemCount = jsonData.items.length;
+                    // if the callback was successful, print the link to Molecule
+                    let itemCount = jsonData.items.length;
                     for (var i = 0; i < itemCount; i++) {
-                        item = jsonData.items[i]
+                        let item = jsonData.items[i];
                         if (item.hasMolecule._about) {
                             var node = document.createElement("li");
                             var textnode = document.createTextNode(item.hasMolecule._about);
@@ -132,9 +133,12 @@
                             document.getElementById("list").appendChild(node);
                         }
                     }
+                    // Add line between searches
+                    document.getElementById("list").appendChild(document.createElement("br"));
                 } else {
                     d3.select("#json").html("No success: " + status);
                 }
+
             };
 
 
