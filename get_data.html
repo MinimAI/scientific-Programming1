@@ -2,45 +2,145 @@
 <html lang="en">
 <head>
     <title>OpenPHACTS Assignment</title>
-    <script src="node_modules/jquery/dist/jquery.min.js"></script>
-    <script src="node_modules/ops.js/src/combined.js"></script>
-    <script type="text/javascript" src="https://egonw.github.io/pils/lib/purl.js"></script>
-    <script type="text/javascript" src="https://egonw.github.io/pils/lib/jquery-1.9.1.min.js"></script>
+
+    <script type="text/javascript" src="node_modules/ops.js/src/combined.js"></script>
+    <script type="text/javascript" src="lib/purl.js"></script>
+    <script type="text/javascript" src="lib/jquery-1.9.1.min.js"></script>
+    <script type="text/javascript" src="lib/d3.v3.min.js"></script>
+    <script type="text/javascript" src="node_modules/wikidata-sdk/dist/wikidata-sdk.js"></script>
 
 
     <meta charset="UTF-8">
 </head>
 <body>
-<h3>Output</h3>
+<form id="frm">
+    Gene: <input type="text" name="inputGene" value="BRCA1">
+    <input type="submit" value="Submit" onclick="assignment();return false">
+</form>
+<pre id="output"></pre>
 <h3>Search Results</h3>
-<p><div id="table"></div></p>
+<p><div id="list"></div></p>
 <h3>Compound Details</h3>
 <p><div id="details"></div></p>
-<h3>JSON reply</h3>
+<h3>Most recent JSON reply</h3>
 <p><div id="json">Nothing yet</div></p>
     <script type="text/javascript">
         // gene : BRCA1
-        let searcher = new ConceptWikiSearch('https://beta.openphacts.org/2.2', 'b9db3313','424834d6629c0089dd4a9aaf2c09e197');
-        let callback=function(success, status, response){
-            document.getElementById("json").innerHTML = JSON.stringify(response);
-            html = "<table>";
-            for (var i=0; i<response.length; i++) {
-                html += "<tr>";
-                html += "<td>";
-                html += "Name: <span>" +
-                    response[i].prefLabel +
-                    "</span>";
-                html += "</td>";
-                html += "</tr>";
-            }
-            html += "</table>";
-            document.getElementById("table").innerHTML = html;
-        };
-        searcher.byTag(
-            'Aspirin', '5', '4',
-            '07a84994-e464-4bbf-812a-a4b96fa3d197',
-            callback
-        );
+        // tasks: openphacts: list drugs / compound that bind on the gene
+        // find genedata from wikidata
+
+        let assignment = function(){
+
+            const gene = document.getElementById("frm")[0].value;
+
+            const sparql = `
+            PREFIX wd: <http://www.wikidata.org/entity/>
+            PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+            select distinct * where {
+                ?qid rdfs:label '${gene}'@en .
+                ?qid wdt:P688 ?gene .
+                ?gene wdt:P352 ?uid.
+                ?gene rdfs:label ?label filter (lang(?label) = "en") .
+            }`;
+
+            const link_base = 'http://purl.uniprot.org/uniprot/';
+
+            fetch(
+                wdk.sparqlQuery(sparql)
+            ).then( response => response.json()
+            ).then( wdk.simplify.sparqlResults
+            ).then(
+                function (response) {
+                    let uid = response[0].uid;
+                    let uniprot_link = link_base.concat(uid);
+                    setupSearch(gene,uid, uniprot_link);
+                    const sources = new TargetSearch("https://beta.openphacts.org/2.2", "91f5d4d0", "1af5086da757e57c553bfa1351708d5f");
+                    sources.targetPharmacologyCount(
+                        uniprot_link,
+                        null, null, null, null, null, null, null, null, null,
+                        null, null, null, null, null, null, null, null, handleCount
+                    );
+
+
+                    sources.targetPharmacology(
+                        uniprot_link,
+                        null, null, null, null, null, null, null, null, null,
+                        null, null, null, null, null, null, null, null, null,
+                        null, null, handleList
+                    )
+                }
+            );
+
+            let setupSearch = function(gene,uid,link){
+                let node = document.createElement("li");
+                let gene_node = document.createTextNode("Gene: " + gene);
+                node.appendChild(gene_node);
+                document.getElementById("list").appendChild(node);
+                
+                node = document.createElement("li");
+                let uniprot_node = document.createTextNode("UniProt identifier: " + uid);
+                node.appendChild(uniprot_node);
+                document.getElementById("list").appendChild(node);
+
+                node = document.createElement("li");
+                let link_node = document.createTextNode("UniProt link: " + link);
+                node.appendChild(link_node);
+                document.getElementById("list").appendChild(node);
+            };
+
+
+
+            var callback = function(success, status, response){
+                console.log(success);
+                console.log(status);
+                console.log(success || status == 200);
+                if (success && status == 200) {
+                    d3.select("#json").html("<pre>" + JSON.stringify(response, undefined, 2) + "</pre>");
+                } else {
+                    d3.select("#json").html("No success: " + status);
+                }
+            };
+
+            var handleCount = function(success, status, jsonData) {
+                d3.select("#json").html("<pre>" + JSON.stringify(jsonData, undefined, 2) + "</pre>");
+                console.log(jsonData)
+                var node = document.createElement("li");
+                if (jsonData.primaryTopic.targetPharmacologyTotalResults) {
+                    var textnode = document.createTextNode("Target count: " + jsonData.primaryTopic.targetPharmacologyTotalResults);
+                } else {
+                    var textnode = document.createTextNode("Target count: " + 0);
+                }
+                node.appendChild(textnode);
+                document.getElementById("list").appendChild(node);
+            };
+
+            var handleList = function(success, status, jsonData) {
+                d3.select("#json").html("<pre>" + JSON.stringify(jsonData, undefined, 2) + "</pre>");
+                console.log(success);
+                console.log(status);
+                console.log(success || status == 200);
+                if (success && status == 200) {
+                    var itemCount = jsonData.items.length;
+                    for (var i = 0; i < itemCount; i++) {
+                        item = jsonData.items[i]
+                        if (item.hasMolecule._about) {
+                            var node = document.createElement("li");
+                            var textnode = document.createTextNode(item.hasMolecule._about);
+                            node.appendChild(textnode);
+                            document.getElementById("list").appendChild(node);
+                        }
+                    }
+                } else {
+                    d3.select("#json").html("No success: " + status);
+                }
+            };
+
+
+
+        }
+
     </script>
 </body>
 </html>
